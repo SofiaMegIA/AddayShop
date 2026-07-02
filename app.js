@@ -3,11 +3,27 @@
 // SPA: Home → Categoría → Producto → Carrito
 // ============================================================
 
-const WA = '573332259912';
+// ---- STORAGE HELPERS ----
+const _lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+
+const DEFAULT_SETTINGS = {
+  waNumber: '573332259912', instagram: 'addayshop',
+  heroTitle: 'Bienestar y belleza que se sienten bien',
+  heroDesc: 'Naturistas, vitaminas, cuidado personal y mucho más. Calidad de verdad, a un mensaje de distancia.',
+  accent: 'neon',
+};
+const DEFAULT_MODULES = { hero:true, trust:true, categories:true, flashsale:true, bestsellers:true, cta:false };
+
+const getStoreSettings  = () => Object.assign({}, DEFAULT_SETTINGS, _lsGet('adday_settings') || {});
+const getStoreModules   = () => Object.assign({}, DEFAULT_MODULES,  _lsGet('adday_modules')  || {});
+const getStoreProducts  = () => _lsGet('adday_products')   || FALLBACK_PRODUCTS;
+const getStoreCategories= () => _lsGet('adday_categories') || FALLBACK_CATEGORIES;
+
+const WA       = getStoreSettings().waNumber;
 const WA_PLAIN = `https://wa.me/${WA}`;
 
-// ---- DATOS DE PRODUCTOS ----
-const PRODUCTS = [
+// ---- DATOS DE PRODUCTOS (fallback) ----
+const FALLBACK_PRODUCTS = [
   { id: 1, brand: 'Adday Vital',  name: 'Vitamina C Efervescente 1000mg',    price: 24900, old: 32900, tag: 'Oferta',       tint: 'mint',  rating: 4.8, count: 214 },
   { id: 2, brand: 'Pure Glow',    name: 'Sérum Facial Vitamina E · 30ml',    price: 38900, old: 49900, tag: 'Más vendido',  tint: 'pink',  rating: 4.9, count: 389 },
   { id: 3, brand: 'NaturActive',  name: 'Magnesio + Zinc · 120 cápsulas',   price: 45900, old: null,  tag: 'Nuevo',        tint: 'lilac', rating: 4.7, count: 96  },
@@ -20,7 +36,7 @@ const PRODUCTS = [
   { id: 10, brand: 'Adday Care',  name: 'Shampoo Sólido Natural',           price: 22900, old: null,  tag: 'Nuevo',        tint: 'mint',  rating: 4.5, count: 64  },
 ];
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { name: 'Naturistas',      bg: '#E7F8EE' },
   { name: 'Medicinales',     bg: '#E6F0FF' },
   { name: 'Belleza',         bg: '#FFE9F3' },
@@ -68,7 +84,7 @@ const addToCart = id => {
   const existing = state.cart.find(i => i.id === id);
   if (existing) { existing.qty++; }
   else {
-    const p = PRODUCTS.find(p => p.id === id);
+    const p = getStoreProducts().find(p => p.id === id);
     if (p) state.cart.push({ ...p, qty: 1 });
   }
   updateCartBadge();
@@ -106,7 +122,8 @@ const buildWAMessage = () => {
 };
 
 const updateWAHref = el => {
-  el.href = `https://wa.me/${WA}?text=${encodeURIComponent(buildWAMessage())}`;
+  const waNum = getStoreSettings().waNumber;
+  el.href = `https://wa.me/${waNum}?text=${encodeURIComponent(buildWAMessage())}`;
 };
 window.updateWAHref = updateWAHref;
 
@@ -136,13 +153,16 @@ const showToast = msg => {
 
 // ---- PRODUCTO CARD ----
 const ProductCard = p => {
-  const bg  = tintBg(p.tint);
+  const oldPrice = p.oldPrice || p.old || null;
+  const bg  = p.img ? null : tintBg(p.tint);
   const tag = p.tag ? tagStyle(p.tag) : null;
-  const hasOld = !!p.old;
-  const disc = hasOld ? Math.round((p.old - p.price) / p.old * 100) : 0;
+  const hasOld = !!oldPrice;
+  const disc = hasOld ? Math.round((oldPrice - p.price) / oldPrice * 100) : 0;
+  const waNum = getStoreSettings().waNumber;
   return `
     <div class="product-card" onclick="navigate('product',{currentProduct:${p.id}})">
-      <div class="product-card__img" style="background-color:${bg}">
+      <div class="product-card__img"${bg ? ` style="background-color:${bg}"` : ''}>
+        ${p.img ? `<img src="${p.img}" alt="${p.name}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : ''}
         ${p.tag ? `<span class="product-card__tag" style="background:${tag.bg};color:${tag.color}">${p.tag}</span>` : ''}
         <button class="product-card__share" onclick="event.stopPropagation()" title="Compartir">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -154,15 +174,15 @@ const ProductCard = p => {
       <div class="product-card__body">
         <div class="product-card__brand">${p.brand}</div>
         <div class="product-card__name">${p.name}</div>
-        <div class="product-card__rating">★ ${p.rating} <span>(${p.count})</span></div>
+        ${p.rating ? `<div class="product-card__rating">★ ${p.rating} <span>(${p.count})</span></div>` : ''}
         <div class="product-card__price">
           <span class="product-card__price-main">${cop(p.price)}</span>
-          ${hasOld ? `<span class="product-card__price-old">${cop(p.old)}</span>` : ''}
+          ${hasOld ? `<span class="product-card__price-old">${cop(oldPrice)}</span>` : ''}
           ${disc  > 0 ? `<span class="product-card__price-discount">-${disc}%</span>` : ''}
         </div>
         <div class="product-card__actions">
           <button class="btn-add" onclick="event.stopPropagation();addToCart(${p.id})">Agregar</button>
-          <button class="btn-quick" onclick="event.stopPropagation();window.open('${WA_PLAIN}','_blank')" title="Compra rápida">
+          <button class="btn-quick" onclick="event.stopPropagation();window.open('https://wa.me/${waNum}','_blank')" title="Compra rápida">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
           </button>
         </div>
@@ -221,7 +241,7 @@ const Header = () => `
     </div>
     <nav class="header__nav">
       <div class="container">
-        ${CATEGORIES.map(c =>
+        ${getStoreCategories().map(c =>
           `<button class="nav-btn" onclick="navigate('cat',{currentCategory:'${c.name}'})">${c.name}</button>`
         ).join('')}
       </div>
@@ -229,19 +249,25 @@ const Header = () => `
   </header>`;
 
 // ---- FOOTER ----
-const Footer = () => `
+const Footer = () => {
+  const s    = getStoreSettings();
+  const cats = getStoreCategories();
+  const waLink  = `https://wa.me/${s.waNumber}`;
+  const igHandle= s.instagram || '@addayshop';
+  const igSlug  = igHandle.replace('@','');
+  return `
   <footer class="footer">
     <div class="footer__inner">
       <div class="footer__brand">
         <div class="footer__logo">ADDAY<span>SHOP</span></div>
         <p>Tu tienda de bienestar, belleza y salud. Productos originales y atención cercana.</p>
         <div class="footer__socials">
-          <a href="${WA_PLAIN}" target="_blank" class="footer__social footer__social--wa">
+          <a href="${waLink}" target="_blank" class="footer__social footer__social--wa">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2a10 10 0 0 0-8.6 15.07L2 22l5.07-1.33A10 10 0 1 0 12 2z"/>
             </svg>
           </a>
-          <a href="https://instagram.com/addayshop" target="_blank" class="footer__social footer__social--ig">
+          <a href="https://instagram.com/${igSlug}" target="_blank" class="footer__social footer__social--ig">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <rect x="3" y="3" width="18" height="18" rx="5.4"/>
               <circle cx="12" cy="12" r="4"/>
@@ -252,8 +278,8 @@ const Footer = () => `
       </div>
       <div class="footer__col">
         <h4>Categorías</h4>
-        ${['Naturistas','Belleza','Vitaminas','Suplementos','Cuidado Personal'].map(c =>
-          `<a href="#" onclick="navigate('cat',{currentCategory:'${c}'});return false">${c}</a>`
+        ${cats.slice(0,5).map(c =>
+          `<a href="#" onclick="navigate('cat',{currentCategory:'${c.name}'});return false">${c.name}</a>`
         ).join('')}
       </div>
       <div class="footer__col">
@@ -264,8 +290,8 @@ const Footer = () => `
       </div>
       <div class="footer__col">
         <h4>Contáctanos</h4>
-        <p>WhatsApp: 333 225 9912<br>Instagram: @addayshop<br>Lun–Sáb · 8am–7pm</p>
-        <a href="${WA_PLAIN}" target="_blank" class="btn-escribenos">Escríbenos</a>
+        <p>WhatsApp: ${s.waNumber}<br>Instagram: ${igHandle}<br>Lun–Sáb · 8am–7pm</p>
+        <a href="${waLink}" target="_blank" class="btn-escribenos">Escríbenos</a>
       </div>
     </div>
     <div class="footer__bottom">
@@ -275,138 +301,143 @@ const Footer = () => `
       </div>
     </div>
   </footer>`;
+};
 
 // ---- WA FAB ----
-const WaFab = () => `
-  <a href="${WA_PLAIN}" target="_blank" class="wa-fab" title="Escríbenos por WhatsApp">
+const WaFab = () => {
+  const waLink = `https://wa.me/${getStoreSettings().waNumber}`;
+  return `
+  <a href="${waLink}" target="_blank" class="wa-fab" title="Escríbenos por WhatsApp">
     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
       <path d="M17.5 14.4c-.3-.15-1.8-.9-2.1-1-.28-.1-.48-.15-.68.15-.2.3-.78 1-.96 1.2-.18.2-.35.22-.65.07-.3-.15-1.27-.47-2.42-1.5-.9-.8-1.5-1.78-1.67-2.08-.18-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.51l-.58-.01c-.2 0-.52.07-.8.37-.27.3-1.05 1.02-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.71.64.72.23 1.38.2 1.9.12.58-.09 1.8-.74 2.05-1.45.25-.7.25-1.31.18-1.44-.07-.13-.27-.2-.57-.35z M12 2a10 10 0 0 0-8.6 15.07L2 22l5.07-1.33A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-3 .79.8-2.93-.2-.3A8.2 8.2 0 1 1 12 20.2z"/>
     </svg>
   </a>`;
+};
 
 // ============================================================
 // PÁGINAS
 // ============================================================
 
 // ---- HOME ----
-const HomePage = () => `
+const HomePage = () => {
+  const prods   = getStoreProducts();
+  const cats    = getStoreCategories();
+  const mods    = getStoreModules();
+  const s       = getStoreSettings();
+  const waLink  = `https://wa.me/${s.waNumber}`;
+  const igHandle= s.instagram || '@addayshop';
+  const igSlug  = igHandle.replace('@','');
+  const offerProds    = prods.filter(p => p.tag === 'Oferta').slice(0, 5);
+  const bestProds     = prods.filter(p => p.tag === 'Más vendido').slice(0, 6);
+  const fallbackProds = prods.slice(0, 5);
+  return `
   <main class="page-home fade-in">
 
-    <section class="hero-section">
+    ${mods.hero ? `<section class="hero-section">
       <div class="container">
         <div class="hero-grid">
           <div class="hero-main">
             <span class="hero-label">NUEVA TEMPORADA</span>
-            <h1>Bienestar y belleza que se sienten bien</h1>
-            <p>Naturistas, vitaminas, cuidado personal y mucho más. Calidad de verdad, a un mensaje de distancia.</p>
+            <h1>${s.heroTitle}</h1>
+            <p>${s.heroDesc}</p>
             <div class="hero-actions">
-              <button class="btn-primary" onclick="navigate('cat',{currentCategory:'Belleza'})">Comprar ahora</button>
-              <button class="btn-outline-light" onclick="navigate('cat',{currentCategory:'Naturistas'})">Ver categorías</button>
+              <button class="btn-primary" onclick="navigate('cat',{currentCategory:'${cats[2]?.name||'Belleza'}'})"  >Comprar ahora</button>
+              <button class="btn-outline-light" onclick="navigate('cat',{currentCategory:'${cats[0]?.name||'Naturistas'}'})">Ver categorías</button>
             </div>
             <div class="hero-deco"></div>
           </div>
           <div class="hero-side">
-            <div class="promo-card promo-card--pink" onclick="navigate('cat',{currentCategory:'Belleza'})">
-              <span class="promo-label">BELLEZA</span>
+            <div class="promo-card promo-card--pink" onclick="navigate('cat',{currentCategory:'${cats[2]?.name||'Belleza'}'})">
+              <span class="promo-label">${(cats[2]?.name||'BELLEZA').toUpperCase()}</span>
               <div class="promo-title">Hasta 40% OFF</div>
               <span>Ver ofertas →</span>
             </div>
-            <div class="promo-card promo-card--neon" onclick="navigate('cat',{currentCategory:'Vitaminas'})">
-              <span class="promo-label promo-label--dark">VITAMINAS</span>
+            <div class="promo-card promo-card--neon" onclick="navigate('cat',{currentCategory:'${cats[3]?.name||'Vitaminas'}'})">
+              <span class="promo-label promo-label--dark">${(cats[3]?.name||'VITAMINAS').toUpperCase()}</span>
               <div class="promo-title">Lleva 2, paga 1</div>
               <span>Aprovechar →</span>
             </div>
           </div>
         </div>
       </div>
-    </section>
+    </section>` : ''}
 
-    <div class="trust-bar">
+    ${mods.trust ? `<div class="trust-bar">
       <div class="trust-bar__inner container">
-        <div class="trust-item">
-          <div class="trust-icon">➜</div>
-          <div><strong>Envío a todo el país</strong><span>Rápido y seguro</span></div>
-        </div>
-        <div class="trust-item">
-          <div class="trust-icon">$</div>
-          <div><strong>Pago contra entrega</strong><span>o por WhatsApp</span></div>
-        </div>
-        <div class="trust-item">
-          <div class="trust-icon">✓</div>
-          <div><strong>100% originales</strong><span>Productos certificados</span></div>
-        </div>
-        <div class="trust-item">
-          <div class="trust-icon">♥</div>
-          <div><strong>Atención cercana</strong><span>Te asesoramos siempre</span></div>
-        </div>
+        <div class="trust-item"><div class="trust-icon">➜</div><div><strong>Envío a todo el país</strong><span>Rápido y seguro</span></div></div>
+        <div class="trust-item"><div class="trust-icon">$</div><div><strong>Pago contra entrega</strong><span>o por WhatsApp</span></div></div>
+        <div class="trust-item"><div class="trust-icon">✓</div><div><strong>100% originales</strong><span>Productos certificados</span></div></div>
+        <div class="trust-item"><div class="trust-icon">♥</div><div><strong>Atención cercana</strong><span>Te asesoramos siempre</span></div></div>
       </div>
-    </div>
+    </div>` : ''}
 
-    <section class="container section-spaced">
+    ${mods.categories ? `<section class="container section-spaced">
       <div class="section-header">
         <h2 class="section-title">Compra por categoría</h2>
-        <a onclick="navigate('cat',{currentCategory:'Belleza'})" class="see-all">Ver todas →</a>
+        <a onclick="navigate('cat',{currentCategory:'${cats[0]?.name||'Belleza'}'})" class="see-all">Ver todas →</a>
       </div>
       <div class="cat-grid">
-        ${CATEGORIES.map(c => `
-          <button class="cat-btn" style="background:${c.bg}" onclick="navigate('cat',{currentCategory:'${c.name}'})">
-            <div class="cat-btn__icon"></div>
+        ${cats.map(c => `
+          <button class="cat-btn" style="background:${c.color||c.bg||'#F2F2EE'}" onclick="navigate('cat',{currentCategory:'${c.name}'})">
+            <div class="cat-btn__icon">${c.emoji||''}</div>
             <span class="cat-btn__name">${c.name}</span>
             <span class="cat-btn__cta">Ver productos →</span>
           </button>`).join('')}
       </div>
-    </section>
+    </section>` : ''}
 
-    <section class="container section-spaced">
+    ${mods.flashsale ? `<section class="container section-spaced">
       <div class="section-header">
         <h2 class="section-title">Ofertas del día</h2>
         <span class="countdown" id="countdown">Cargando…</span>
-        <a onclick="navigate('cat',{currentCategory:'Belleza'})" class="see-all">Ver más →</a>
+        <a onclick="navigate('cat',{currentCategory:'${cats[0]?.name||'Belleza'}'})" class="see-all">Ver más →</a>
       </div>
       <div class="products-grid">
-        ${PRODUCTS.slice(0, 5).map(ProductCard).join('')}
+        ${(offerProds.length ? offerProds : fallbackProds).map(ProductCard).join('')}
       </div>
-    </section>
+    </section>` : ''}
 
-    <section class="container section-spaced">
+    ${mods.bestsellers ? `<section class="container section-spaced">
       <h2 class="section-title" style="margin-bottom:20px">Más vendidos</h2>
       <div class="products-grid">
-        ${PRODUCTS.slice(4, 10).map(ProductCard).join('')}
+        ${(bestProds.length ? bestProds : prods.slice(4,10)).map(ProductCard).join('')}
       </div>
-    </section>
+    </section>` : ''}
 
-    <section class="cta-section container" style="padding-bottom:54px">
+    ${mods.cta ? `<section class="cta-section container" style="padding-bottom:54px">
       <div class="cta-grid">
         <div class="cta-wa">
           <h2>Compra fácil, <span>paga por WhatsApp</span></h2>
           <p>Arma tu pedido y nosotros te lo confirmamos al instante. Pago contra entrega disponible.</p>
-          <a href="${WA_PLAIN}" target="_blank" class="btn-wa-lg">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2a10 10 0 0 0-8.6 15.07L2 22l5.07-1.33A10 10 0 1 0 12 2z"/>
-            </svg>
+          <a href="${waLink}" target="_blank" class="btn-wa-lg">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.07L2 22l5.07-1.33A10 10 0 1 0 12 2z"/></svg>
             Escríbenos ahora
           </a>
         </div>
         <div class="cta-ig">
-          <div class="cta-ig__handle">@addayshop</div>
+          <div class="cta-ig__handle">${igHandle}</div>
           <p>Síguenos para ofertas, novedades y tips de bienestar.</p>
-          <a href="https://instagram.com/addayshop" target="_blank" class="btn-ig">
+          <a href="https://instagram.com/${igSlug}" target="_blank" class="btn-ig">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <rect x="3" y="3" width="18" height="18" rx="5.4"/>
-              <circle cx="12" cy="12" r="4"/>
+              <rect x="3" y="3" width="18" height="18" rx="5.4"/><circle cx="12" cy="12" r="4"/>
               <circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/>
             </svg>
             Seguir en Instagram
           </a>
         </div>
       </div>
-    </section>
+    </section>` : ''}
 
-  </main>`;
+  </main>`; };
 
 // ---- CATEGORÍA ----
 const CategoryPage = () => {
-  const cat = state.currentCategory || 'Belleza';
+  const cat   = state.currentCategory || 'Belleza';
+  const prods = getStoreProducts();
+  const cats  = getStoreCategories();
+  const catProds = prods.filter(p => p.category === cat);
+  const displayProds = catProds.length ? catProds : prods;
+  const brands = [...new Set(prods.map(p => p.brand))].slice(0, 6);
   return `
     <main class="page-cat fade-in">
       <div class="container">
@@ -414,7 +445,7 @@ const CategoryPage = () => {
         <div class="cat-header">
           <div>
             <h1>${cat}</h1>
-            <span class="cat-count">${PRODUCTS.length * 13} productos</span>
+            <span class="cat-count">${displayProds.length} productos</span>
           </div>
           <div class="sort-row">
             <span>Ordenar por</span>
@@ -422,7 +453,6 @@ const CategoryPage = () => {
               <option>Relevancia</option>
               <option>Menor precio</option>
               <option>Mayor precio</option>
-              <option>Mejor calificados</option>
               <option>Más vendidos</option>
             </select>
           </div>
@@ -435,7 +465,7 @@ const CategoryPage = () => {
             </div>
             <div class="aside-section">
               <div class="aside-title">Categoría</div>
-              ${CATEGORIES.map(c => `
+              ${cats.map(c => `
                 <label class="filter-label">
                   <input type="checkbox" ${c.name === cat ? 'checked' : ''} />
                   ${c.name}
@@ -443,7 +473,7 @@ const CategoryPage = () => {
             </div>
             <div class="aside-section">
               <div class="aside-title">Marca</div>
-              ${['Adday Care','Pure Glow','NaturActive','BioCol'].map(b => `
+              ${brands.map(b => `
                 <label class="filter-label">
                   <input type="checkbox" /> ${b}
                 </label>`).join('')}
@@ -457,7 +487,7 @@ const CategoryPage = () => {
               </div>
             </div>
             <div class="aside-section">
-              ${['En oferta','Más vendidos','Mejor calificados','Solo disponibles'].map(t => `
+              ${['En oferta','Más vendidos','Solo disponibles'].map(t => `
                 <label class="filter-label">
                   <input type="checkbox" /> ${t}
                 </label>`).join('')}
@@ -467,15 +497,9 @@ const CategoryPage = () => {
           <div>
             <div class="active-filters">
               <span class="filter-tag filter-tag--active">${cat} ✕</span>
-              <span class="filter-tag">En oferta ✕</span>
             </div>
             <div class="products-grid products-grid--cat">
-              ${PRODUCTS.map(ProductCard).join('')}
-            </div>
-            <div class="pagination">
-              ${[1,2,3,4,'›'].map((p, i) =>
-                `<button class="page-btn${i === 0 ? ' page-btn--active' : ''}">${p}</button>`
-              ).join('')}
+              ${displayProds.map(ProductCard).join('')}
             </div>
           </div>
         </div>
@@ -485,12 +509,17 @@ const CategoryPage = () => {
 
 // ---- PRODUCTO ----
 const ProductPage = () => {
-  const p    = PRODUCTS.find(x => x.id === state.currentProduct) || PRODUCTS[1];
-  const bg   = tintBg(p.tint);
-  const hasOld = !!p.old;
-  const disc = hasOld ? Math.round((p.old - p.price) / p.old * 100) : 0;
-  const related = PRODUCTS.filter(x => x.id !== p.id).slice(0, 5);
-  const similar = PRODUCTS.filter(x => x.id !== p.id).slice(2, 7);
+  const prods  = getStoreProducts();
+  const s      = getStoreSettings();
+  const p      = prods.find(x => x.id === state.currentProduct) || prods[0];
+  if (!p) return '<main class="page-product fade-in"><div class="container" style="padding:80px 0;text-align:center"><p>Producto no encontrado.</p></div></main>';
+  const oldPrice = p.oldPrice || p.old || null;
+  const bg   = p.img ? null : tintBg(p.tint);
+  const hasOld = !!oldPrice;
+  const disc = hasOld ? Math.round((oldPrice - p.price) / oldPrice * 100) : 0;
+  const waLink = `https://wa.me/${s.waNumber}`;
+  const related = prods.filter(x => x.id !== p.id).slice(0, 5);
+  const similar = prods.filter(x => x.id !== p.id).slice(2, 7);
   const thumbs  = ['#FFE9F3','#EFEAFE','#E7F8EE','#FFEAD9'];
 
   const descMap = {
@@ -507,8 +536,8 @@ const ProductPage = () => {
         <div class="breadcrumb">Inicio <span>/</span> ${p.brand} <span>/</span> <strong>${p.name}</strong></div>
         <div class="product-layout">
           <div class="product-gallery">
-            <div class="product-main-img" style="background-color:${bg}">
-              <div class="product-img-placeholder"></div>
+            <div class="product-main-img"${bg ? ` style="background-color:${bg}"` : ''}>
+              ${p.img ? `<img src="${p.img}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;border-radius:16px">` : `<div class="product-img-placeholder"></div>`}
               ${p.tag ? `<span class="product-badge product-badge--dark">${p.tag.toUpperCase()}</span>` : ''}
             </div>
             <div class="product-thumbs">
@@ -527,10 +556,10 @@ const ProductPage = () => {
             </div>
             <div class="product-price">
               <span class="product-price-main">${cop(p.price)}</span>
-              ${hasOld ? `<span class="product-price-old">${cop(p.old)}</span>` : ''}
+              ${hasOld ? `<span class="product-price-old">${cop(oldPrice)}</span>` : ''}
               ${disc > 0 ? `<span class="product-price-badge">-${disc}%</span>` : ''}
             </div>
-            ${hasOld ? `<div class="product-saving">Ahorras ${cop(p.old - p.price)}</div>` : ''}
+            ${hasOld ? `<div class="product-saving">Ahorras ${cop(oldPrice - p.price)}</div>` : ''}
             <div class="product-features">
               <div class="feature-item"><span class="check">✓</span>Producto 100% original y certificado</div>
               <div class="feature-item"><span class="check">✓</span>Asesoría cercana por WhatsApp</div>
@@ -546,7 +575,7 @@ const ProductPage = () => {
             </div>
             <div class="product-actions">
               <button class="btn-add-product" onclick="addToCart(${p.id});navigate('cart')">Agregar al carrito</button>
-              <a href="${WA_PLAIN}" target="_blank" class="btn-buy-wa">Compra rápida</a>
+              <a href="${waLink}" target="_blank" class="btn-buy-wa">Compra rápida</a>
               <button class="btn-share" title="Compartir">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/>
@@ -596,9 +625,10 @@ window.changeQty = changeQty;
 
 // ---- CARRITO ----
 const CartPage = () => {
-  const items = state.cart;
-  const total = cartTotal();
-  const waHref = `https://wa.me/${WA}?text=${encodeURIComponent(buildWAMessage())}`;
+  const items  = state.cart;
+  const total  = cartTotal();
+  const waNum  = getStoreSettings().waNumber;
+  const waHref = `https://wa.me/${waNum}?text=${encodeURIComponent(buildWAMessage())}`;
 
   const itemsHTML = items.length === 0
     ? `<div style="padding:40px;text-align:center;color:#8a8a8a;font-size:15px">
@@ -607,7 +637,7 @@ const CartPage = () => {
        </div>`
     : items.map((ci, idx) => `
         <div class="cart-item">
-          <div class="cart-item__img" style="background-color:${tintBg(ci.tint)}"></div>
+          <div class="cart-item__img" style="${ci.img ? '' : `background-color:${tintBg(ci.tint||'mint')}`}">${ci.img ? `<img src="${ci.img}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">` : ''}</div>
           <div class="cart-item__info">
             <div class="cart-item__brand">${ci.brand}</div>
             <div class="cart-item__name">${ci.name}</div>
