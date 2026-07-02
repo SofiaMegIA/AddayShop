@@ -213,6 +213,28 @@ input, select, textarea { font-family: inherit; }
   transition: opacity .2s;
 }
 .cart-btn:hover { opacity: .85; }
+
+.admin-access-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(227,255,18,.12);
+  color: #E3FF12;
+  border: 1px solid rgba(227,255,18,.3);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  text-decoration: none;
+  letter-spacing: .3px;
+  transition: background .2s, border-color .2s;
+  white-space: nowrap;
+}
+.admin-access-btn:hover {
+  background: rgba(227,255,18,.22);
+  border-color: rgba(227,255,18,.6);
+}
 #cart-badge {
   background: #FF2E9A;
   color: #fff;
